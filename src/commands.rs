@@ -17,7 +17,7 @@ use crate::clip;
 use crate::generate;
 use crate::git::{self, Git};
 use crate::gpg::Gpg;
-use crate::otp::Totp;
+use crate::otp::{self, Kind, Otp};
 use crate::store::{self, GPG_ID, Store};
 use crate::term;
 use crate::tmp::SecureDir;
@@ -436,17 +436,13 @@ fn write_private(path: &Path, data: &[u8]) -> Result<()> {
 pub fn generate(
     ctx: &Ctx,
     name: &str,
-    length: Option<usize>,
-    no_symbols: bool,
+    recipe: generate::Recipe,
     clip_it: bool,
     in_place: bool,
     force: bool,
 ) -> Result<()> {
     let name = Store::clean_name(name)?;
-    let length = length.unwrap_or_else(generate::default_length);
-    if length == 0 {
-        bail!("pass-length must be greater than zero.");
-    }
+    let password = recipe.generate()?;
     let path = ctx.store.entry_path(&name);
     ctx.store.recipients(&ctx.gpg, &path)?;
     let exists = path.is_file();
@@ -463,7 +459,6 @@ pub fn generate(
         bail!("aborted.");
     }
 
-    let password = generate::password(&generate::charset(no_symbols)?, length)?;
     let (contents, verb) = if in_place {
         let old = ctx.gpg.decrypt(&path)?;
         let rest = old
@@ -624,15 +619,31 @@ pub fn otp(ctx: &Ctx, name: &str, clip_it: bool) -> Result<()> {
         bail!("{name} is not in the password store.");
     }
     let contents = ctx.gpg.decrypt(&path)?;
-    let totp = Totp::from_entry(&String::from_utf8_lossy(&contents))?;
-    let (code, remaining) = totp.now();
-    if clip_it {
-        clip::copy(code.as_bytes(), &format!("the OTP code for {name}"))
-    } else {
-        println!("{code}");
-        if term::stdout_color() {
-            eprintln!("(valid for {remaining}s)");
+    let text = Zeroizing::new(String::from_utf8_lossy(&contents).into_owned());
+    let otp = Otp::from_entry(&text)?;
+    let (code, remaining) = match otp.kind {
+        Kind::Totp { period } => {
+            let (code, remaining) = otp.now(period);
+            (code, Some(remaining))
         }
-        Ok(())
+        Kind::Hotp { counter } => {
+            // Store the advanced counter before showing the code, so a code is
+            // never shown twice (same scheme and commit as pass-otp).
+            let next = counter + 1;
+            let updated = Zeroizing::new(otp::with_counter(&text, next));
+            ctx.encrypt_entry(updated.as_bytes(), &path)?;
+            ctx.commit(&[&path], &format!("Increment HOTP counter for {name}."))?;
+            (otp.code(next), None)
+        }
+    };
+    if clip_it {
+        return clip::copy(code.as_bytes(), &format!("the OTP code for {name}"));
     }
+    println!("{code}");
+    if let Some(remaining) = remaining
+        && term::stdout_color()
+    {
+        eprintln!("(valid for {remaining}s)");
+    }
+    Ok(())
 }

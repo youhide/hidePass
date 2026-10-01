@@ -43,3 +43,14 @@ check "$(pass ls | wc -l | tr -d ' ')" "$("$hp" ls | wc -l | tr -d ' ')" "same n
 check "$(git -C "$PASSWORD_STORE_DIR" log --format=%s | sed -n '1p;2p;4p' | paste -sd '|' -)" \
   "Rename Email/work to Shared/work.|Rename Social/x to Shared/.|Add generated password for Web/github." \
   "commit messages"
+
+# HOTP counters must advance the same way in both tools (needs pass-otp).
+if pass otp --help >/dev/null 2>&1; then
+  printf 'pw\notpauth://hotp/Ex:me?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&counter=0&issuer=Ex\n' |
+    pass insert -m -f Hotp >/dev/null
+  check "$("$hp" otp Hotp 2>/dev/null)" "287082" "hidepass HOTP (RFC 4226 counter 1)"
+  check "$(pass otp Hotp | tail -1)" "359152" "pass-otp continues from the hidepass counter"
+  check "$("$hp" otp Hotp 2>/dev/null)" "969429" "hidepass continues from the pass-otp counter"
+else
+  echo "skip: pass-otp not installed"
+fi

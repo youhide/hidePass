@@ -1,6 +1,7 @@
 //! Git integration, matching the commits pass makes so both tools can share a
 //! repository history.
 
+use std::os::fd::AsFd;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Stdio};
 
@@ -64,8 +65,12 @@ impl Git {
         if self.sign_commits() {
             commit.arg("-S");
         }
+        // git's summary goes to stderr so stdout stays clean for scripts
+        // (`hidepass otp x | ...`, `hidepass generate x | ...`).
+        let stderr = std::io::stderr().as_fd().try_clone_to_owned()?;
         if !commit
             .args(["-m", message])
+            .stdout(Stdio::from(stderr))
             .status()
             .context("could not run git")?
             .success()

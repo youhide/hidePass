@@ -1,6 +1,6 @@
 [package]
 name = "hidepass"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.88"
 description = "A pass-compatible password manager: same store, same gpg keys, more features."
@@ -13,7 +13,7 @@ categories = ["command-line-utilities", "cryptography"]
 [dependencies]
 anyhow = "1.0.104"
 clap = { version = "4.6.7", features = ["derive", "env", "wrap_help"] }
-clap_complete = "4.6.11"
+clap_complete = { version = "4.6.11", features = ["unstable-dynamic"] }
 data-encoding = "2.11.1"
 getrandom = "0.4.3"
 hmac = "0.13.0"
@@ -31,3 +31,8 @@ zeroize = "1.9.0"
 assert_cmd = "2.2.2"
 predicates = "3.1.4"
 tempfile = "3.27.0"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6.4"
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSPasteboard"] }
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSString", "NSArray"] }

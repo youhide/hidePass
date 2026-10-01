@@ -1,12 +1,17 @@
 use clap::{Args, Parser, Subcommand};
 use clap_complete::Shell;
+use clap_complete::engine::{ArgValueCompleter, SubcommandCandidates};
+
+use crate::complete;
 
 #[derive(Parser)]
 #[command(
     name = "hidepass",
     version,
     about = "A pass-compatible password manager: same store, same gpg keys, more features.",
-    after_help = "Running `hidepass <name>` is the same as `hidepass show <name>`, and `hidepass` alone lists the store."
+    after_help = "Running `hidepass <name>` is the same as `hidepass show <name>`, and `hidepass` alone lists the store.",
+    allow_external_subcommands = true,
+    add = SubcommandCandidates::new(complete::all_entries)
 )]
 pub struct Cli {
     #[command(subcommand)]
@@ -18,7 +23,7 @@ pub enum Command {
     /// Initialize the store (or a subfolder) for the given GPG ids and re-encrypt existing entries.
     Init {
         /// Subfolder to initialize instead of the store root.
-        #[arg(short = 'p', long = "path", value_name = "SUBFOLDER")]
+        #[arg(short = 'p', long = "path", value_name = "SUBFOLDER", add = ArgValueCompleter::new(complete::folders))]
         subfolder: Option<String>,
         /// GPG ids to encrypt to. A single empty string removes the subfolder's .gpg-id.
         #[arg(required = true, num_args = 1..)]
@@ -26,7 +31,10 @@ pub enum Command {
     },
     /// List entries as a tree.
     #[command(visible_alias = "list")]
-    Ls { subfolder: Option<String> },
+    Ls {
+        #[arg(add = ArgValueCompleter::new(complete::folders))]
+        subfolder: Option<String>,
+    },
     /// Show an entry, or list a folder.
     Show(ShowArgs),
     /// List entries whose names match any of the terms.
@@ -53,10 +61,14 @@ pub enum Command {
         /// Overwrite an existing entry without asking.
         #[arg(short = 'f', long)]
         force: bool,
+        #[arg(add = ArgValueCompleter::new(complete::entries))]
         name: String,
     },
     /// Edit an entry with $EDITOR, using a RAM-backed temporary file.
-    Edit { name: String },
+    Edit {
+        #[arg(add = ArgValueCompleter::new(complete::entries))]
+        name: String,
+    },
     /// Generate a new password.
     Generate {
         /// Use only letters and digits.
@@ -71,6 +83,13 @@ pub enum Command {
         /// Overwrite an existing entry without asking.
         #[arg(short = 'f', long)]
         force: bool,
+        /// Generate a passphrase of N words from the EFF long wordlist instead.
+        #[arg(short = 'w', long, value_name = "N", conflicts_with_all = ["no_symbols", "length"])]
+        words: Option<usize>,
+        /// Separator between passphrase words.
+        #[arg(long, value_name = "SEP", default_value = "-", requires = "words")]
+        separator: String,
+        #[arg(add = ArgValueCompleter::new(complete::entries))]
         name: String,
         /// Length (default: $PASSWORD_STORE_GENERATED_LENGTH or 25).
         length: Option<usize>,
@@ -82,6 +101,7 @@ pub enum Command {
         recursive: bool,
         #[arg(short = 'f', long)]
         force: bool,
+        #[arg(add = ArgValueCompleter::new(complete::entries))]
         name: String,
     },
     /// Move or rename an entry or folder, re-encrypting if the destination uses other keys.
@@ -89,7 +109,9 @@ pub enum Command {
     Mv {
         #[arg(short = 'f', long)]
         force: bool,
+        #[arg(add = ArgValueCompleter::new(complete::entries))]
         old: String,
+        #[arg(add = ArgValueCompleter::new(complete::entries))]
         new: String,
     },
     /// Copy an entry or folder, re-encrypting if the destination uses other keys.
@@ -97,7 +119,9 @@ pub enum Command {
     Cp {
         #[arg(short = 'f', long)]
         force: bool,
+        #[arg(add = ArgValueCompleter::new(complete::entries))]
         old: String,
+        #[arg(add = ArgValueCompleter::new(complete::entries))]
         new: String,
     },
     /// Run git inside the store (`hidepass git init` sets up gpg diffs like pass).
@@ -105,10 +129,12 @@ pub enum Command {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
     },
-    /// Print the current TOTP code from an entry's otpauth:// URI.
+    /// Print the current one-time code from an entry's otpauth:// URI (TOTP, or HOTP
+    /// with the counter advanced and committed).
     Otp {
         #[arg(short = 'c', long)]
         clip: bool,
+        #[arg(add = ArgValueCompleter::new(complete::entries))]
         name: String,
     },
     /// Check that every entry is encrypted to the keys in its .gpg-id.
@@ -116,14 +142,18 @@ pub enum Command {
         /// Re-encrypt the entries that are not.
         #[arg(long)]
         fix: bool,
+        #[arg(add = ArgValueCompleter::new(complete::folders))]
         subfolder: Option<String>,
     },
-    /// Print a shell completion script.
+    /// Print a shell completion script that also completes entry names.
     Completions { shell: Shell },
     /// Print the version.
     Version,
     #[command(name = "__clip-restore", hide = true)]
     ClipRestore { timeout: u64 },
+    /// `hidepass <name> ...`, shown like pass does.
+    #[command(external_subcommand)]
+    External(Vec<String>),
 }
 
 #[derive(Args)]
@@ -137,6 +167,7 @@ pub struct ShowArgs {
     /// Show only the value of a `key: value` line (`password` is the first line).
     #[arg(long, value_name = "KEY")]
     pub field: Option<String>,
+    #[arg(add = ArgValueCompleter::new(complete::entries))]
     pub name: Option<String>,
 }
 

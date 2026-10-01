@@ -17,6 +17,11 @@
 #   HOMEPAGE      formula homepage
 #   LICENSE       SPDX license id
 #   TAG           release tag (e.g. v0.0.7)
+#
+# Optional env:
+#   COMPLETIONS_SUBCOMMAND  subcommand that prints a completion script for a
+#                           shell name (e.g. "completions"); installs bash, zsh
+#                           and fish completions with the formula
 set -euo pipefail
 
 : "${TAP_TOKEN:?}"; : "${TAP_REPO:?}"; : "${RELEASE_REPO:?}"
@@ -42,6 +47,12 @@ sha_for() {
   fi
   printf '%s' "$sha"
 }
+
+completions=""
+if [ -n "${COMPLETIONS_SUBCOMMAND:-}" ]; then
+  completions="
+    generate_completions_from_executable(bin/\"${BINARY_NAME}\", \"${COMPLETIONS_SUBCOMMAND}\")"
+fi
 
 work="$(mktemp -d)"
 git clone --depth 1 "https://x-access-token:${TAP_TOKEN}@github.com/${TAP_REPO}.git" "$work"
@@ -77,7 +88,7 @@ class ${class_name} < Formula
   end
 
   def install
-    bin.install "${BINARY_NAME}"
+    bin.install "${BINARY_NAME}"${completions}
   end
 
   test do

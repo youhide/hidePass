@@ -1,6 +1,7 @@
 mod cli;
 mod clip;
 mod commands;
+mod complete;
 mod generate;
 mod git;
 mod gpg;
@@ -12,11 +13,14 @@ mod tmp;
 use std::process::ExitCode;
 
 use clap::{CommandFactory, Parser};
+use clap_complete::env::{CompleteEnv, Shells};
 
 use cli::{COMMANDS, Cli, Command};
 use commands::Ctx;
 
 fn main() -> ExitCode {
+    // Answers the shell's `COMPLETE=<shell> hidepass -- ...` callbacks and exits.
+    CompleteEnv::with_factory(Cli::command).complete();
     let cli = Cli::parse_from(normalize_args(std::env::args().collect()));
     match run(cli) {
         Ok(code) => ExitCode::from(code),
@@ -62,13 +66,26 @@ fn run(cli: Cli) -> anyhow::Result<u8> {
             return Ok(0);
         }
         Command::Completions { shell } => {
-            clap_complete::generate(
-                shell,
-                &mut Cli::command(),
+            let shells = Shells::builtins();
+            let completer = shells
+                .completer(&shell.to_string())
+                .ok_or_else(|| anyhow::anyhow!("no completion support for {shell}"))?;
+            completer.write_registration(
+                "COMPLETE",
+                "hidepass",
+                "hidepass",
                 "hidepass",
                 &mut std::io::stdout(),
-            );
+            )?;
             return Ok(0);
+        }
+        // normalize_args already routes unknown names to `show`; this only runs
+        // if clap sees one anyway.
+        Command::External(args) => {
+            let argv = ["hidepass".to_string(), "show".to_string()]
+                .into_iter()
+                .chain(args);
+            Cli::parse_from(normalize_args(argv.collect())).command
         }
         Command::ClipRestore { timeout } => {
             clip::restore(timeout)?;
@@ -99,9 +116,17 @@ fn run(cli: Cli) -> anyhow::Result<u8> {
             clip,
             in_place,
             force,
+            words,
+            separator,
             name,
             length,
-        } => commands::generate(&ctx, &name, length, no_symbols, clip, in_place, force)?,
+        } => {
+            let recipe = match words {
+                Some(count) => generate::Recipe::Words { count, separator },
+                None => generate::Recipe::Chars { length, no_symbols },
+            };
+            commands::generate(&ctx, &name, recipe, clip, in_place, force)?
+        }
         Command::Rm {
             recursive,
             force,
@@ -115,9 +140,10 @@ fn run(cli: Cli) -> anyhow::Result<u8> {
         }
         Command::Otp { clip, name } => commands::otp(&ctx, &name, clip)?,
         Command::Check { fix, subfolder } => commands::check(&ctx, subfolder, fix)?,
-        Command::Version | Command::Completions { .. } | Command::ClipRestore { .. } => {
-            unreachable!()
-        }
+        Command::Version
+        | Command::Completions { .. }
+        | Command::ClipRestore { .. }
+        | Command::External(_) => unreachable!(),
     }
     Ok(0)
 }

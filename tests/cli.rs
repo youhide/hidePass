@@ -407,3 +407,75 @@ fn edit_round_trip() {
         .success()
         .stdout(predicate::str::contains("unchanged"));
 }
+
+#[test]
+fn generate_passphrase() {
+    let env = Env::new();
+    env.init_with_git();
+    env.hp()
+        .args(["generate", "--words", "5", "--separator", ".", "phrase"])
+        .assert()
+        .success();
+    let phrase = env.show("phrase");
+    let words: Vec<&str> = phrase.trim_end().split('.').collect();
+    assert_eq!(words.len(), 5);
+    assert!(
+        words
+            .iter()
+            .all(|w| !w.is_empty() && w.chars().all(|c| c.is_ascii_lowercase() || c == '-'))
+    );
+    env.hp()
+        .args(["generate", "--words", "4", "-n", "x"])
+        .assert()
+        .failure();
+}
+
+#[test]
+fn hotp_advances_and_commits_the_counter() {
+    let env = Env::new();
+    env.init_with_git();
+    // RFC 4226 secret; counter=0 means the next code uses counter 1.
+    env.insert(
+        "hotp",
+        "pw\notpauth://hotp/Ex:me?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&counter=0&issuer=Ex\n",
+    );
+    env.hp()
+        .args(["otp", "hotp"])
+        .assert()
+        .success()
+        .stdout("287082\n");
+    env.hp()
+        .args(["otp", "hotp"])
+        .assert()
+        .success()
+        .stdout("359152\n");
+    assert_eq!(
+        env.show("hotp"),
+        "pw\notpauth://hotp/Ex:me?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&counter=2&issuer=Ex\n"
+    );
+    assert_eq!(env.git_log()[0], "Increment HOTP counter for hotp.");
+}
+
+#[test]
+fn completes_entry_names() {
+    let env = Env::new();
+    env.init_with_git();
+    env.insert("Email/work", "x\n");
+    env.insert("Email/home", "x\n");
+    env.insert("Web/github", "x\n");
+    let complete = |args: &[&str]| {
+        let out = env
+            .hp()
+            .env("COMPLETE", "fish")
+            .arg("--")
+            .arg("hidepass")
+            .args(args)
+            .output()
+            .unwrap();
+        String::from_utf8(out.stdout).unwrap()
+    };
+    assert_eq!(complete(&["show", "Em"]), "Email/\n");
+    assert_eq!(complete(&["edit", "Email/"]), "Email/home\nEmail/work\n");
+    assert_eq!(complete(&["W"]), "Web/\nWeb/github\n");
+    assert!(complete(&["ls", ""]).starts_with("Email/\nWeb/\n"));
+}
