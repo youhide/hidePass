@@ -1,0 +1,33 @@
+[package]
+name = "hidepass"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+description = "A pass-compatible password manager: same store, same gpg keys, more features."
+license = "MIT"
+repository = "https://github.com/youhide/hidePass"
+readme = "README.md"
+keywords = ["password", "pass", "gpg", "password-store", "cli"]
+categories = ["command-line-utilities", "cryptography"]
+
+[dependencies]
+anyhow = "1.0.104"
+clap = { version = "4.6.7", features = ["derive", "env", "wrap_help"] }
+clap_complete = "4.6.11"
+data-encoding = "2.11.1"
+getrandom = "0.4.3"
+hmac = "0.13.0"
+libc = "0.2.189"
+qrcode = "0.14.1"
+regex = "1.13.1"
+rpassword = "7.5.4"
+sha1 = "0.11.0"
+sha2 = "0.11.0"
+signal-hook = "0.4.4"
+tempfile = "3.27.0"
+zeroize = "1.9.0"
+
+[dev-dependencies]
+assert_cmd = "2.2.2"
+predicates = "3.1.4"
+tempfile = "3.27.0"
