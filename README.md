@@ -47,7 +47,7 @@ SSH remotes and signed commits work exactly as they do with pass.
 ## Install
 
 ```sh
-brew install youhide/youhide/hidepass
+brew install youhide/tap/hidepass
 ```
 
 Or build from source with Rust 1.88 or newer:
@@ -178,8 +178,9 @@ bash .github/scripts/pass-compat.sh target/debug/hidepass   # cross-check agains
 ```
 
 Releases: bump `version` in `Cargo.toml`, tag `vX.Y.Z` and push the tag. CI builds
-macOS and Linux binaries, publishes the GitHub release and updates the formula in
-[youhide/homebrew-youhide](https://github.com/youhide/homebrew-youhide).
+macOS and Linux binaries and publishes the GitHub release; the formula lives in
+[youhide/homebrew-tap](https://github.com/youhide/homebrew-tap), which picks
+up the new release on its own within the hour.
 
 ## License
 
