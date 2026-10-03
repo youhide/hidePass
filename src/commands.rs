@@ -21,6 +21,7 @@ use crate::otp::{self, Kind, Otp};
 use crate::store::{self, GPG_ID, Store};
 use crate::term;
 use crate::tmp::SecureDir;
+use crate::wallet::{self, Wallet};
 
 pub struct Ctx {
     pub store: Store,
@@ -490,6 +491,52 @@ pub fn generate(
         println!("The generated password for {name} is:\n{}", *password);
         Ok(())
     }
+}
+
+/// Creates a BIP39 wallet in a new entry. Unlike `generate`, an existing entry
+/// is only replaced with --force: losing a mnemonic means losing the funds, and
+/// `yesno` says yes when stdin is not a terminal.
+pub fn wallet(ctx: &Ctx, name: &str, words: usize, clip_it: bool, force: bool) -> Result<()> {
+    let name = Store::clean_name(name)?;
+    let path = ctx.store.entry_path(&name);
+    ctx.store.recipients(&ctx.gpg, &path)?;
+    if !force && path.exists() {
+        bail!("{name} already exists; refusing to overwrite a wallet (use --force).");
+    }
+    let wallet = Wallet::create(words)?;
+    ctx.encrypt_entry(&wallet.entry(), &path)?;
+    ctx.commit(&[&path], &format!("Add wallet for {name}."))?;
+
+    let color = term::stdout_color();
+    if !clip_it {
+        let mut grid = Zeroizing::new(String::new());
+        for (i, word) in wallet.mnemonic.split(' ').enumerate() {
+            if i % 4 == 3 {
+                grid.push_str(&format!("{:>2}. {word}\n", i + 1));
+            } else {
+                grid.push_str(&format!("{:>2}. {word:<8}  ", i + 1));
+            }
+        }
+        if color {
+            println!(
+                "\x1b[1mThe mnemonic for \x1b[4m{name}\x1b[24m is:\x1b[0m\n\x1b[1m\x1b[93m{}\x1b[0m",
+                grid.trim_end()
+            );
+        } else {
+            println!("The mnemonic for {name} is:\n{}", grid.trim_end());
+        }
+    }
+    let (b, r) = if color {
+        ("\x1b[1m", "\x1b[0m")
+    } else {
+        ("", "")
+    };
+    println!("{b}BTC{r}  {}  {}", wallet.btc_address, wallet::BTC_PATH);
+    println!("{b}ETH{r}  {}  {}", wallet.eth_address, wallet::ETH_PATH);
+    if clip_it {
+        clip::copy(wallet.mnemonic.as_bytes(), &name)?;
+    }
+    Ok(())
 }
 
 /// Resolves a user-given name to an existing file or directory, preferring the

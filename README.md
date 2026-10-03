@@ -86,6 +86,7 @@ hidepass completions fish | source      # ~/.config/fish/config.fish
 | `edit <name>` | Edit with `$EDITOR` in a RAM-backed temp dir |
 | `generate [-n] [-c] [-i\|-f] <name> [len]` | Generate a password; `-i` replaces only line 1 |
 | `generate --words N [--separator S] <name>` | Generate a passphrase of N words instead |
+| `wallet [-w 12\|24] [-c] [-f] <name>` | Create a BIP39 crypto wallet and store its mnemonic and first BTC/ETH addresses |
 | `rm [-r] [-f] <name>` | Remove an entry or folder |
 | `mv` / `cp [-f] <old> <new>` | Move or copy, re-encrypting when the destination uses other keys |
 | `init [-p sub] <gpg-id>…` | Set the keys for the store or a subfolder and re-encrypt |
@@ -100,6 +101,33 @@ hidepass completions fish | source      # ~/.config/fish/config.fish
 [EFF long wordlist](https://www.eff.org/dice) (7776 words, ~12.9 bits each, so 6 words
 ≈ 77 bits), e.g. `cubicle-unfold-dripping-tribune-ample-reveal`. `--separator` changes
 the `-`; `-i`, `-c` and `-f` work as for passwords.
+
+### Crypto wallets
+
+`hidepass wallet crypto/main` creates a new wallet with one command. It generates a
+24-word BIP39 mnemonic from the OS CSPRNG (`-w 12` for 12 words), derives the first
+receive addresses, and stores everything as one entry:
+
+```
+<the 24 words>
+type: bip39
+btc-path: m/84'/0'/0'/0/0
+btc-address: bc1q…
+eth-path: m/44'/60'/0'/0/0
+eth-address: 0x…
+```
+
+The same mnemonic works for Bitcoin and Ethereum (and other chains): import it into
+any BIP39 wallet (Sparrow, Electrum, a hardware wallet, MetaMask, …) and it shows these
+same addresses. You can hand out an address without decrypting the mnemonic onto the
+screen, with `hidepass show --field btc-address crypto/main` or as a QR code with
+`hidepass show --field btc-address -q crypto/main`. `-c` copies the mnemonic to the clipboard instead of
+printing it. All addresses are mainnet, and no BIP39 passphrase is used.
+
+Overwriting an existing entry is refused unless you pass `-f`; there is no y/N prompt
+here, because replacing a mnemonic by accident loses the funds. Remember that if you
+push the store to a git remote, the mnemonic goes along with it, encrypted to your gpg
+keys like every other entry.
 
 ### Entries with fields and one-time codes
 
@@ -156,4 +184,6 @@ macOS and Linux binaries, publishes the GitHub release and updates the formula i
 ## License
 
 MIT. The EFF long wordlist (`assets/eff_large_wordlist.txt`) is by the Electronic
-Frontier Foundation, licensed CC BY 3.0 US.
+Frontier Foundation, licensed CC BY 3.0 US. The BIP39 English wordlist
+(`assets/bip39_english.txt`) is from [BIP 39](https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki),
+licensed MIT.

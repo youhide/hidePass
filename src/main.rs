@@ -9,6 +9,7 @@ mod otp;
 mod store;
 mod term;
 mod tmp;
+mod wallet;
 
 use std::process::ExitCode;
 
@@ -127,6 +128,12 @@ fn run(cli: Cli) -> anyhow::Result<u8> {
             };
             commands::generate(&ctx, &name, recipe, clip, in_place, force)?
         }
+        Command::Wallet {
+            words,
+            clip,
+            force,
+            name,
+        } => commands::wallet(&ctx, &name, words, clip, force)?,
         Command::Rm {
             recursive,
             force,

@@ -431,6 +431,83 @@ fn generate_passphrase() {
 }
 
 #[test]
+fn wallet_stores_a_mnemonic_and_addresses() {
+    let env = Env::new();
+    env.init_with_git();
+    env.hp()
+        .args(["wallet", "crypto/main"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("24. "))
+        .stdout(predicate::str::contains("BTC  bc1q"));
+    let entry = env.show("crypto/main");
+    let mut lines = entry.lines();
+    let mnemonic = lines.next().unwrap();
+    assert_eq!(mnemonic.split(' ').count(), 24);
+    assert!(
+        mnemonic
+            .split(' ')
+            .all(|w| w.chars().all(|c| c.is_ascii_lowercase()))
+    );
+    assert!(lines.any(|l| l == "type: bip39"));
+    let field = |key: &str| {
+        let out = env
+            .hp()
+            .args(["show", "--field", key, "crypto/main"])
+            .output()
+            .unwrap();
+        String::from_utf8(out.stdout)
+            .unwrap()
+            .trim_end()
+            .to_string()
+    };
+    assert!(field("btc-address").starts_with("bc1q"));
+    let eth = field("eth-address");
+    assert!(eth.len() == 42 && eth.starts_with("0x"));
+    assert!(eth[2..].chars().all(|c| c.is_ascii_hexdigit()));
+    assert_eq!(env.git_log()[0], "Add wallet for crypto/main.");
+
+    // stdin is not a terminal here, which is exactly when a y/N prompt would
+    // say yes, so an existing wallet must be refused outright.
+    env.hp()
+        .args(["wallet", "crypto/main"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--force"));
+    assert_eq!(env.show("crypto/main"), entry);
+
+    env.hp()
+        .args(["wallet", "-f", "-w", "12", "crypto/main"])
+        .assert()
+        .success();
+    let replaced = env.show("crypto/main");
+    assert_eq!(replaced.lines().next().unwrap().split(' ').count(), 12);
+
+    env.hp()
+        .args(["wallet", "-w", "18", "crypto/other"])
+        .assert()
+        .failure();
+}
+
+#[test]
+fn wallet_clip_keeps_the_mnemonic_off_stdout() {
+    let env = Env::new();
+    env.init_with_git();
+    let out = env
+        .hp()
+        .args(["wallet", "-c", "cold"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let mnemonic = env.show("cold").lines().next().unwrap().to_string();
+    assert_eq!(fs::read_to_string(env.clipboard()).unwrap(), mnemonic);
+    let out = String::from_utf8(out).unwrap();
+    assert!(out.contains("bc1q") && !out.contains(&mnemonic));
+}
+
+#[test]
 fn hotp_advances_and_commits_the_counter() {
     let env = Env::new();
     env.init_with_git();

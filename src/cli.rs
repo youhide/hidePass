@@ -1,3 +1,4 @@
+use clap::builder::{PossibleValuesParser, TypedValueParser};
 use clap::{Args, Parser, Subcommand};
 use clap_complete::Shell;
 use clap_complete::engine::{ArgValueCompleter, SubcommandCandidates};
@@ -94,6 +95,20 @@ pub enum Command {
         /// Length (default: $PASSWORD_STORE_GENERATED_LENGTH or 25).
         length: Option<usize>,
     },
+    /// Create a BIP39 crypto wallet and store its mnemonic with its first BTC and ETH addresses.
+    Wallet {
+        /// Number of mnemonic words.
+        #[arg(short = 'w', long, value_name = "N", default_value_t = 24, value_parser = PossibleValuesParser::new(["12", "24"]).map(|s| s.parse::<usize>().unwrap()))]
+        words: usize,
+        /// Copy the mnemonic to the clipboard instead of printing it.
+        #[arg(short = 'c', long)]
+        clip: bool,
+        /// Overwrite an existing entry. Without it, an existing entry is never replaced.
+        #[arg(short = 'f', long)]
+        force: bool,
+        #[arg(add = ArgValueCompleter::new(complete::entries))]
+        name: String,
+    },
     /// Remove an entry or, with -r, a folder.
     #[command(visible_aliases = ["remove", "delete"])]
     Rm {
@@ -184,6 +199,7 @@ pub const COMMANDS: &[&str] = &[
     "add",
     "edit",
     "generate",
+    "wallet",
     "rm",
     "remove",
     "delete",
